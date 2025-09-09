@@ -13,25 +13,12 @@ const port = process.env.PORT || 4000
 connectDB()
 connectCloudinary()
 
-// CORS configuration
-const allowedOrigins = [
-  'https://adminbookappointdoctors.netlify.app',
-  'https://bookappointdoctors.netlify.app',
-  process.env.FRONTEND_ORIGIN || '',
-  process.env.ADMIN_ORIGIN || ''
-].filter(Boolean)
-
-const corsOptions = {
-  origin: allowedOrigins,
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "token"]
-}
+// CORS: allow all origins and headers
+app.use(cors())
+app.options('*', cors())
 
 // middlewares
 app.use(express.json())
-app.use(cors(corsOptions))
-app.options('*', cors(corsOptions))
 
 // api endpoints
 app.use("/api/user", userRouter)
