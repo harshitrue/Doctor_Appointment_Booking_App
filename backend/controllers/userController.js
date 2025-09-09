@@ -6,14 +6,8 @@ import doctorModel from "../models/doctorModel.js";
 import appointmentModel from "../models/appointmentModel.js";
 import { v2 as cloudinary } from 'cloudinary'
 import stripe from "stripe";
-import razorpay from 'razorpay';
 
-// Gateway Initialize
-const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY)
-const razorpayInstance = new razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
-})
+// Gateway Initialize (Stripe will be initialized lazily in handlers)
 
 // API to register user
 const registerUser = async (req, res) => {
@@ -235,54 +229,6 @@ const listAppointment = async (req, res) => {
     }
 }
 
-// API to make payment of appointment using razorpay
-const paymentRazorpay = async (req, res) => {
-    try {
-
-        const { appointmentId } = req.body
-        const appointmentData = await appointmentModel.findById(appointmentId)
-
-        if (!appointmentData || appointmentData.cancelled) {
-            return res.json({ success: false, message: 'Appointment Cancelled or not found' })
-        }
-
-        // creating options for razorpay payment
-        const options = {
-            amount: appointmentData.amount * 100,
-            currency: process.env.CURRENCY,
-            receipt: appointmentId,
-        }
-
-        // creation of an order
-        const order = await razorpayInstance.orders.create(options)
-
-        res.json({ success: true, order })
-
-    } catch (error) {
-        console.log(error)
-        res.json({ success: false, message: error.message })
-    }
-}
-
-// API to verify payment of razorpay
-const verifyRazorpay = async (req, res) => {
-    try {
-        const { razorpay_order_id } = req.body
-        const orderInfo = await razorpayInstance.orders.fetch(razorpay_order_id)
-
-        if (orderInfo.status === 'paid') {
-            await appointmentModel.findByIdAndUpdate(orderInfo.receipt, { payment: true })
-            res.json({ success: true, message: "Payment Successful" })
-        }
-        else {
-            res.json({ success: false, message: 'Payment Failed' })
-        }
-    } catch (error) {
-        console.log(error)
-        res.json({ success: false, message: error.message })
-    }
-}
-
 // API to make payment of appointment using Stripe
 const paymentStripe = async (req, res) => {
     try {
@@ -296,7 +242,11 @@ const paymentStripe = async (req, res) => {
             return res.json({ success: false, message: 'Appointment Cancelled or not found' })
         }
 
-        const currency = process.env.CURRENCY.toLocaleLowerCase()
+        const currencyEnv = process.env.CURRENCY
+        if (!process.env.STRIPE_SECRET_KEY) {
+            return res.json({ success: false, message: 'Stripe is not configured' })
+        }
+        const currency = (currencyEnv || 'INR').toLocaleLowerCase()
 
         const line_items = [{
             price_data: {
@@ -309,6 +259,7 @@ const paymentStripe = async (req, res) => {
             quantity: 1
         }]
 
+        const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY)
         const session = await stripeInstance.checkout.sessions.create({
             success_url: `${origin}/verify?success=true&appointmentId=${appointmentData._id}`,
             cancel_url: `${origin}/verify?success=false&appointmentId=${appointmentData._id}`,
@@ -351,8 +302,6 @@ export {
     bookAppointment,
     listAppointment,
     cancelAppointment,
-    paymentRazorpay,
-    verifyRazorpay,
     paymentStripe,
     verifyStripe
 }
