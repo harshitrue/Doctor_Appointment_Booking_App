@@ -132,7 +132,7 @@ const bookAppointment = async (req, res) => {
         const { userId, docId, slotDate, slotTime } = req.body
         const docData = await doctorModel.findById(docId).select("-password")
 
-        if (!docData.available) {
+        if (!docData?.available) {
             return res.json({ success: false, message: 'Doctor Not Available' })
         }
 
@@ -152,14 +152,19 @@ const bookAppointment = async (req, res) => {
         }
 
         const userData = await userModel.findById(userId).select("-password")
+        if (!userData) {
+            return res.json({ success: false, message: 'User not found. Please log in again.' })
+        }
 
-        delete docData.slots_booked
+        // strip internal fields before embedding
+        const docDataLean = docData.toObject ? docData.toObject() : docData
+        delete docDataLean.slots_booked
 
         const appointmentData = {
             userId,
             docId,
             userData,
-            docData,
+            docData: docDataLean,
             amount: docData.fees,
             slotTime,
             slotDate,
